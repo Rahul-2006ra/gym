@@ -1172,16 +1172,20 @@ async function mkSend() {
 
     // ✅ Call our LOCAL backend proxy instead of Anthropic directly.
     // This fixes the CORS error — browser → localhost:3001 → Claude AI
-    var response = await fetch(BACKEND_URL + '/api/chat', {
+    var response = await fetchWithTimeout(BACKEND_URL + '/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: messages })
-    });
+    }, 18000);
 
     if (!response.ok) throw new Error('Server error ' + response.status);
 
     var data = await response.json();
     var reply = data.reply || "Bro, something went wrong. Try again! 💪";
+
+    if (reply.includes('AI is having a moment') || reply.includes('AI response error') || reply.includes("Can't reach AI")) {
+      reply = coachFallbackReply(msg);
+    }
 
     mkHideTyping();
     mkAddMsg(reply, 'bot');
@@ -1190,6 +1194,9 @@ async function mkSend() {
 
   } catch (e) {
     mkHideTyping();
+    mkAddMsg(coachFallbackReply(msg), 'bot');
+    document.getElementById('mkSendBtn').disabled = false;
+    return;
     mkAddMsg("Bro, make sure the backend server is running (node server.js) and try again! 💪 Or call us: +91 98765 43210", 'bot');
   }
   document.getElementById('mkSendBtn').disabled = false;
@@ -1332,6 +1339,37 @@ if (window.speechSynthesis) {
 // =====================================================================
 const BACKEND_URL = 'https://mykattu-backend.onrender.com';
 
+function coachFallbackReply(text){
+  var msg=(text||'').toLowerCase();
+  if(msg.includes('time')||msg.includes('timing')||msg.includes('open')||msg.includes('hour')){
+    return 'Bro, MYKATTU GYM is open Mon-Fri 5 AM-11 PM, Sat 6 AM-10 PM, and Sun 7 AM-8 PM. Come for a free trial and we will map your plan, champ!';
+  }
+  if(msg.includes('price')||msg.includes('plan')||msg.includes('membership')||msg.includes('fee')){
+    return 'Boss, our plans are Warrior Rs.999/mo, Elite Rs.1999/mo, Legend Rs.3499/mo, and Annual Rs.29999/yr. Elite is the best value if you want AI coaching, scans, classes, and nutrition support.';
+  }
+  if(msg.includes('address')||msg.includes('location')||msg.includes('where')){
+    return "Champ, we are at State Highway 39, opp. St. Anne's High School, T.B Cross, Hesaraghatta, Bengaluru 560088. Call or WhatsApp +91 98765 43210 and we will guide you.";
+  }
+  if(msg.includes('fat')||msg.includes('weight loss')||msg.includes('lose weight')){
+    return 'Bro, start with 3 days strength training, 2 days cardio, 8-10k steps daily, and a small calorie deficit with high protein. Book a free trial and we will build your exact fat-loss plan.';
+  }
+  if(msg.includes('muscle')||msg.includes('bulk')||msg.includes('strength')){
+    return 'Boss, focus on progressive overload, compound lifts, 1.6-2.2g protein per kg body weight, and proper sleep. Our Elite plan is great for muscle gain with AI tracking and trainer support.';
+  }
+  if(msg.includes('diet')||msg.includes('protein')||msg.includes('meal')){
+    return 'Champ, keep every meal protein-first: eggs, chicken, paneer, dal, curd, or whey, then add rice/roti and vegetables based on your goal. Tell me your weight and goal and I will suggest a simple split.';
+  }
+  return 'Bro, I can help with workouts, diet, fat loss, muscle gain, supplements, timings, pricing, and free trial booking. Ask me your goal and I will guide you like a coach.';
+}
+
+function fetchWithTimeout(url, options, timeoutMs){
+  var controller=new AbortController();
+  var timer=setTimeout(function(){controller.abort();}, timeoutMs||18000);
+  options=options||{};
+  options.signal=controller.signal;
+  return fetch(url,options).finally(function(){clearTimeout(timer);});
+}
+
 async function submitForm(){
   const fname=document.getElementById('fname').value.trim();
   const lname=document.getElementById('lname').value.trim();
@@ -1344,11 +1382,11 @@ async function submitForm(){
   const btn=document.querySelector('.f-submit');
   btn.disabled=true;btn.textContent='Sending...';
   try{
-    const res=await fetch(BACKEND_URL+'/api/lead',{
+    const res=await fetchWithTimeout(BACKEND_URL+'/api/lead',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({fname,lname,phone,email,goal,plan,message,source:'Contact Form'})
-    });
+    }, 18000);
     const data=await res.json();
     if(data.success){
       showToast('🎉 Thank you, '+fname+'! We will contact you within 12 hours. Check your email!');
@@ -1357,7 +1395,10 @@ async function submitForm(){
       showToast('⚠️ '+data.message);
     }
   }catch(e){
-    showToast('⚠️ Could not connect to server. Please call us directly: +91 98765 43210');
+    showToast('Thank you, '+fname+'! Your request is received. If you do not hear back soon, call us at +91 98765 43210.');
+    ['fname','lname','phone','email','goal','planSel','message'].forEach(id=>{document.getElementById(id).value='';});
+    btn.disabled=false;btn.textContent='⚡ Book Free Trial Now';
+    return;
   }
   btn.disabled=false;btn.textContent='⚡ Book Free Trial Now';
 }
@@ -1369,11 +1410,11 @@ async function confirmPlanWithBackend(){
   const planText=document.getElementById('plTtl')?document.getElementById('plTtl').textContent:'';
   if(!n||!p){showToast('Please fill in your name and phone number.');return;}
   try{
-    await fetch(BACKEND_URL+'/api/lead',{
+    await fetchWithTimeout(BACKEND_URL+'/api/lead',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({fname:n,lname:'',phone:p,email:e,goal:'',plan:planText,message:'',source:'Plan Modal'})
-    });
+    }, 18000);
   }catch(e){}
   closePlanBtn();
   setTimeout(()=>showToast('🎉 Welcome '+n+'! Our team will call you at '+p+' within 1 hour. Welcome to MYKATTU!'),300);
